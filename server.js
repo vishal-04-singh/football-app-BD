@@ -318,7 +318,7 @@ const initializeData = async () => {
         },
       ])
 
-      console.log("✅ Sample players created for Alpha FC (7 playing + 3 substitutes)")
+      console.log("✅ Sample players created for Alpha FC (7 playing + 4 substitutes)")
     }
   } catch (error) {
     console.error("❌ Error initializing data:", error)
@@ -880,9 +880,9 @@ app.post("/api/players", authenticateToken, async (req, res) => {
 
     // Validate jersey number
     const jerseyNum = Number(jerseyNumber)
-    if (isNaN(jerseyNum) || jerseyNum < 1 || jerseyNum > 99) {
+    if (isNaN(jerseyNum) || jerseyNum < 1 || jerseyNum > 1001) {
       console.log("❌ Invalid jersey number:", jerseyNumber)
-      return res.status(400).json({ error: "Jersey number must be between 1 and 99" })
+      return res.status(400).json({ error: "Jersey number must be between 1 and 1000" })
     }
 
     // Validate photo if provided
@@ -946,9 +946,9 @@ app.post("/api/players", authenticateToken, async (req, res) => {
     let playerIsSubstitute = false
     if (mainPlayersCount >= 7) {
       // Main squad is full, must be substitute
-      if (substitutesCount >= 3) {
+      if (substitutesCount >= 4) {
         return res.status(400).json({
-          error: "Team already has maximum substitutes (3). Cannot add more players.",
+          error: "Team already has maximum substitutes (4). Cannot add more players.",
         })
       }
       playerIsSubstitute = true
@@ -970,7 +970,7 @@ app.post("/api/players", authenticateToken, async (req, res) => {
       ...playerData,
       photo: playerData.photo ? "[IMAGE_DATA]" : "No photo",
       squadType: playerIsSubstitute ? "Substitute" : "Main Squad",
-      currentSquad: `${mainPlayersCount}/7 main, ${substitutesCount}/3 subs`,
+      currentSquad: `${mainPlayersCount}/7 main, ${substitutesCount}/4 subs`,
     })
 
     const player = new Player(playerData)
@@ -1297,6 +1297,51 @@ app.post("/api/matches/fix-events", authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message })
   }
 })
+
+// Get players for a specific team
+app.get("/api/teams/:teamId/players", async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    
+    console.log(`📊 Fetching players for team: ${teamId}`);
+
+    // Find the team
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+
+    // Get all players for this team
+    const players = await Player.find({ teamId: teamId }).sort({ 
+      isSubstitute: 1, // Main players first (isSubstitute: false)
+      jerseyNumber: 1  // Then by jersey number
+    });
+
+    console.log(`✅ Found ${players.length} players for ${team.name}`);
+    
+    // Return players with consistent structure
+    const formattedPlayers = players.map(player => ({
+      _id: player._id,
+      id: player._id,
+      name: player.name,
+      position: player.position,
+      jerseyNumber: player.jerseyNumber,
+      photo: player.photo || null,
+      isSubstitute: player.isSubstitute || false,
+      teamId: player.teamId
+    }));
+
+    res.json(formattedPlayers);
+
+  } catch (error) {
+    console.error("❌ Error fetching team players:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch team players",
+      details: error.message 
+    });
+  }
+});
+
 
 // Health check
 app.get("/api/health", (req, res) => {
